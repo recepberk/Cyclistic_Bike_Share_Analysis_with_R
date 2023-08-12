@@ -1,0 +1,269 @@
+---
+title: "Cyclistic Bike Share Analysis"
+author: "Recep Berk"
+date: "2023-08-11"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Context
+
+Let's say you're a data analyst working on the marketing analytics team at Cyclistic, a bike-sharing company in Chicago. The chief marketing officer believes that the future success of the company depends on maximizing the number of annual memberships. Therefore, your team wants to understand how regular cyclists and annual members use Cyclistic bikes differently. From these insights, the team will design a new marketing strategy to convert casual riders into annual members. But first, Cyclistic operators must approve your proposals, so the results must be presented with data insights and professional visualizations.
+
+## Ask
+
+Question 1. What is the difference between subscribers and customers using Cyclistic bikes? 2. Why did Custumer buy an annual Cyclistic membership? 3. How can Cyclistic use digital media to influence casual riders to become members?
+
+## Prepare
+
+Dataset: <https://divvy-tripdata.s3.amazonaws.com/index.html>
+
+For this analysis, I will use 2021 April to 2022 March data.
+
+```{r}
+# Install packages
+install.packages("tidyverse")
+install.packages("lubridate")
+install.packages("ggplot2")
+install.packages("dplyr")
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+# import dataset
+df1 <- read_csv("~/Data Science Source/R/bike_share/202104-divvy-tripdata.csv")
+df2 <- read_csv("~/Data Science Source/R/bike_share/202105-divvy-tripdata.csv")
+df3 <- read_csv("~/Data Science Source/R/bike_share/202106-divvy-tripdata.csv")
+df4 <- read_csv("~/Data Science Source/R/bike_share/202107-divvy-tripdata.csv")
+df5 <- read_csv("~/Data Science Source/R/bike_share/202108-divvy-tripdata.csv")
+df6 <- read_csv("~/Data Science Source/R/bike_share/202109-divvy-tripdata.csv")
+df7 <- read_csv("~/Data Science Source/R/bike_share/202110-divvy-tripdata.csv")
+df8 <- read_csv("~/Data Science Source/R/bike_share/202111-divvy-tripdata.csv")
+df9 <- read_csv("~/Data Science Source/R/bike_share/202112-divvy-tripdata.csv")
+df10 <- read_csv("~/Data Science Source/R/bike_share/202201-divvy-tripdata.csv")
+df11 <- read_csv("~/Data Science Source/R/bike_share/202202-divvy-tripdata.csv")
+df12 <- read_csv("~/Data Science Source/R/bike_share/202203-divvy-tripdata.csv")
+```
+
+## Process
+
+First, we need to check the column names before merging the four datasets. This is important because all column names must be the same.
+
+```{r}
+colnames(df1)
+colnames(df2)
+colnames(df3)
+colnames(df4)
+colnames(df5)
+colnames(df6)
+colnames(df7)
+colnames(df8)
+colnames(df9)
+colnames(df10)
+colnames(df11)
+colnames(df12)
+```
+
+So, If column names are the same then, I will merge the dataframes into one dataframe.
+
+```{r}
+bike_trips <- rbind(df1,df2,df3,df4,df5,df6,df7,df8,df9,df10,df11,df12)
+```
+
+Next, we need to check the data types of each column to make sure all the data is formatted correctly.
+
+```{r}
+str(df1)
+str(df2)
+str(df3)
+str(df4)
+str(df5)
+str(df6)
+str(df7)
+str(df8)
+str(df9)
+str(df10)
+str(df11)
+str(df12)
+```
+
+The next step is to clean the data. This step is very important to ensure accurate data and calculations can be performed later. In this section, we'll clean up the `bike_trips` dataset by removing any empty rows and columns. This helps us ensure that our dataset is tidy and ready for analysis.
+
+```{r}
+# Cleaning Up Empty Rows and Columns in the Bike Trips Data
+bike_trips <- janitor::remove_empty(bike_trips, which = c("cols"))
+bike_trips <- janitor::remove_empty(bike_trips, which = c("rows"))
+```
+
+We will add columns that list the day, month, day, and year of each trip. This will allow us to aggregate trip data for each month, day or year.
+
+```{r}
+bike_trips$date <- as.Date(bike_trips$started_at) 
+bike_trips$month <- format(as.Date(bike_trips$date), "%m")
+bike_trips$day <- format(as.Date(bike_trips$date), "%d")
+bike_trips$year <- format(as.Date(bike_trips$date), "%Y")
+bike_trips$day_of_week <- format(as.Date(bike_trips$date), "%A")
+colnames(bike_trips)
+```
+
+We'll address missing values. Specifically, we'll remove any rows where the start_station_name column has missing values. These rows might not contribute effectively to our analysis.
+
+```{r}
+bike_trips <- bike_trips %>%
+select(started_at,ended_at,start_station_name,member_casual,rideable_type,day_of_week,member_casual,month) %>%
+na.omit(start_station_name)
+```
+
+Now, we will add a column for the trip length for each trip by finding the time difference between the start time and end time of the trip.
+
+```{r}
+bike_trips$ride_length = difftime(bike_trips$ended_at,bike_trips$started_at)
+
+```
+
+There is some "bad" data to remove when ride_length is a negative number due to the maintenance of removing the bike for quality check. We're going to create a new dataframe that doesn't have these negative trip length trips.
+
+```{r}
+bike_trips_data_clean <- bike_trips[!(bike_trips$ride_length <= 0),]
+glimpse(bike_trips_data_clean)
+```
+
+## Analyze
+
+We will now perform a descriptive analysis of the data to find patterns between Customer and Subscriber. Before we begin the analysis, it is a good idea to review basic descriptive statistics about the data.
+
+```{r}
+mean(bike_trips_data_clean$ride_length)
+median(bike_trips_data_clean$ride_length) 
+max(bike_trips_data_clean$ride_length) 
+min(bike_trips_data_clean$ride_length)
+```
+
+First, we'll compare Customer and Subscriber trip stats.
+
+```{r}
+# Calculate multiple summary statistics at once
+summary_stats <- summaryBy(
+  ride_length ~ member_casual,
+  data = bike_trips_data_clean,
+  FUN = c(mean, median, max, min)
+)
+```
+
+```{r}
+# rename columns for clarity
+colnames(summary_stats) <- c(
+  "Member_Casual", "Mean_Ride_Length", "Median_Ride_Length", "Max_Ride_Length", "Min_Ride_Length"
+)
+```
+
+Before continuing, sort the day_of_week column in the correct order.
+
+```{r}
+bike_trips_data_clean$day_of_week <- ordered(bike_trips_data_clean$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+```
+
+Next, we will check the average ride time per day and the total number of trips for Customer and Subscriber
+
+```{r}
+plot <- bike_trips_data_clean %>% 
+  group_by(member_casual, day_of_week) %>%  #groups by member_casual
+  summarise(number_of_rides = n() #calculates the number of rides and average duration 
+  ,average_ride_length = mean(ride_length),.groups="drop") %>% # calculates the average duration
+  arrange(member_casual, day_of_week) #sort
+
+```
+
+## Share
+
+Before making recommendations to the marketing department, we will create some visualizations to share with stakeholders as well as give us a better idea of what insights to share.
+
+```{r}
+custom_theme <- theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "white"),  # Set background color
+    panel.grid.major = element_blank(),             # Remove grid lines
+    panel.grid.minor = element_blank(),             # Remove grid lines
+    panel.border = element_blank(),                 # Remove panel border
+    panel.background = element_blank(),             # Remove panel background
+    legend.background = element_rect(fill = "white"), # Set legend background color
+    legend.key = element_rect(fill = "white"),       # Set legend key background color
+    axis.text.x = element_text(angle = 45, hjust = 1) # Rotate x-axis labels
+  )
+```
+
+```{r}
+custom_colors <- c("#2874A6", "#FF5733")
+
+ggplot(plot, aes(x = day_of_week, y = number_of_rides, fill = member_casual)) +
+  labs(title ="Total rides of Members and Casual riders Vs. Day of the week") +
+  geom_col(width = 0.5, position = position_dodge(width = 0.5)) +
+  scale_fill_manual(values = custom_colors) +  # Apply custom colors to bars
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "white")  # Set background color
+  )
+```
+
+**From the chart above, it can be seen that Subscriber is the group with the most number of rides on weekdays.**
+
+```{r}
+custom_colors <- c("#2874A6", "#FF5733")  
+
+# Your second ggplot code with customized colors
+ggplot(plot, aes(x = day_of_week, y = average_ride_length, fill = member_casual)) +
+  labs(title = "Average ride time of Members and Casual riders Vs. Day of the week") +
+  geom_col(width = 0.5, position = position_dodge(width = 0.5)) +
+  scale_fill_manual(values = custom_colors) +  # Apply custom colors to bars
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "white")  # Set background color
+  )
+```
+
+**From the chart above, we can observe that the Customer group cycled for longer periods of the week with the highest number of rides on weekends while the Subscribers drove at a steady pace during the week with the highest number of rides. highest on weekends.**
+
+```{r}
+custom_colors <- c("#2874A6", "#FF5733")
+
+bike_trips_data_clean %>%  
+  group_by(member_casual, month) %>% 
+  summarise(number_of_rides = n(), .groups="drop") %>% 
+  arrange(member_casual, month)  %>% 
+  ggplot(aes(x = month, y = number_of_rides, fill = member_casual)) +
+  labs(title = "Total rides by Members and Casual riders by Month") +
+  theme(axis.text.x = element_text(angle = 45)) +
+  geom_col(width = 0.5, position = position_dodge(width = 0.5)) +
+  scale_fill_manual(values = custom_colors) +  # Apply custom colors to bars
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "white")  # Set background color
+  )
+```
+
+**From the chart above, we can see that the Subscriber group has a higher number of trips throughout the year**
+
+## Act
+
+For the final step in the data analysis process, we will make three recommendations to increase the number of Subscribers every year. But first, we'll lay out three key insights.
+
+### Key Findings:
+
+1\. Customer rides the most on weekends. In contrast, Subscriber makes the most trips during the week.
+
+2\. On average, subscriber rides are shorter than customers'.
+
+3\. There is no difference between customers and subscribers in terms of the number of trips they make per month. Both customers and subscribers have the highest number of trips in the summer months and the least number of trips in late winter and early spring.
+
+### Recommendations
+
+1\. Target customer bike rentals for weekend fun.
+
+2\. Create a big summer campaign when more people can afford to rent bikes.
